@@ -1,0 +1,8 @@
+[package]
+name = "desktop"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+core-emu = { path = "../core-emu" }
+sdl2 = "0.37.0"
