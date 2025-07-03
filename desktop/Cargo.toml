@@ -3,6 +3,13 @@ name = "desktop"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "chip8-emu"
+path = "src/main.rs"
+
 [dependencies]
-core-emu = { path = "../core-emu" }
-sdl2 = "0.37.0"
+clap = { version = "4.5.40", features = ["derive"] }
+emulator = { path = "../emulator" }
+winit = "0.30.11"
+pixels = "0.15.0"
+rodio = "0.20.1"

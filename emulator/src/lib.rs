@@ -104,6 +104,10 @@ impl Chip8 {
         return self.screen;
     }
 
+    pub fn get_sound_timer(&self) -> u8 {
+        return self.st;
+    }
+
     // Function to be able to update keypresses.
     pub fn keypress(&mut self, idx: usize, pressed: bool) {
         self.keys[idx as usize] = pressed;
