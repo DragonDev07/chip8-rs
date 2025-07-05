@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use clap::Parser;
-use emulator::Chip8;
+use emulator::Emulator;
 use pixels::{Pixels, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -14,8 +14,8 @@ use winit::window::{Window, WindowAttributes};
 
 use crate::args::Args;
 
-const WINDOW_WIDTH: u32 = emulator::SCREEN_WIDTH as u32;
-const WINDOW_HEIGHT: u32 = emulator::SCREEN_HEIGHT as u32;
+const WINDOW_WIDTH: u32 = emulator::constants::DISPLAY_WIDTH as u32;
+const WINDOW_HEIGHT: u32 = emulator::constants::DISPLAY_HEIGHT as u32;
 const WINDOW_SCALE: u32 = 20;
 
 const CPU_FREQUENCY: u32 = 600; // Hz
@@ -27,10 +27,10 @@ struct App {
     pub args: Args,
     pub window: Option<Arc<Window>>,
     pub pixels: Option<Pixels<'static>>,
-    pub chip8: Option<Chip8>,
+    pub emu: Option<Emulator>,
     pub last_cpu_tick_time: Instant,
     pub last_timer_tick_time: Instant,
-    audio_stream: Option<rodio::OutputStream>,
+    _audio_stream: Option<rodio::OutputStream>,
     audio_handle: Option<rodio::OutputStreamHandle>,
     beep_sink: Option<rodio::Sink>,
 }
@@ -42,10 +42,10 @@ impl App {
             args,
             window: None,
             pixels: None,
-            chip8: None,
+            emu: None,
             last_cpu_tick_time: Instant::now(),
             last_timer_tick_time: Instant::now(),
-            audio_stream: Some(audio_stream),
+            _audio_stream: Some(audio_stream),
             audio_handle: Some(audio_handle),
             beep_sink: None,
         }
@@ -54,10 +54,10 @@ impl App {
     fn draw_screen(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Unwrap components, returning if they are not initialized.
         let pixels = self.pixels.as_mut().ok_or("Pixels not initialized")?;
-        let chip8 = self.chip8.as_ref().ok_or("Chip8 not initialized")?;
+        let emu: &mut Emulator = self.emu.as_mut().ok_or("Emulator not initialized")?;
 
         let frame = pixels.frame_mut();
-        let emu_screen = chip8.get_display();
+        let emu_screen = emu.get_display_buffer();
 
         // Iterate over each pixel of the Chip-8's screen.
         for y in 0..WINDOW_HEIGHT as usize {
@@ -114,24 +114,24 @@ impl ApplicationHandler for App {
 
         // Pixels expects the internal resolution (64x32 for CHIP-8)
         let pixels = Pixels::new(
-            emulator::SCREEN_WIDTH as u32,
-            emulator::SCREEN_HEIGHT as u32,
+            emulator::constants::DISPLAY_WIDTH as u32,
+            emulator::constants::DISPLAY_HEIGHT as u32,
             surface_texture,
         )
         .expect("Could not create pixels.rs instance."); // TODO: Better error handling.
 
         // Initialize Chip8 emulator core.
-        let mut chip8 = Chip8::new();
+        let mut emu = Emulator::new();
 
         // Load ROM from file specified in arguments.
         let rom_data = fs::read(&self.args.rom_path)
             .expect(&format!("Failed to read ROM file '{}'", self.args.rom_path)); // TODO: Better error handling.
 
-        chip8.load(&rom_data); // TODO: Implement error handling.
+        emu.load_rom(&rom_data); // TODO: Implement error handling.
 
         // Store all initialized components in App struct.
         self.pixels = Some(pixels);
-        self.chip8 = Some(chip8);
+        self.emu = Some(emu);
         self.window = Some(window_arc); // Store the Arc'd window
 
         // Reset last CPU and timer tick times.
@@ -149,7 +149,7 @@ impl ApplicationHandler for App {
         let Some(pixels) = self.pixels.as_mut() else {
             return;
         };
-        let Some(chip8) = self.chip8.as_mut() else {
+        let Some(chip8) = self.emu.as_mut() else {
             return;
         };
 
@@ -178,7 +178,11 @@ impl ApplicationHandler for App {
 
                 // Map all other keys to Chip-8 keys (or discard within function).
                 if let Some(chip8_key_idx) = map_keyboard_to_chip8_key(physical_key) {
-                    chip8.keypress(chip8_key_idx, is_pressed);
+                    if is_pressed {
+                        chip8.press_key(chip8_key_idx);
+                    } else {
+                        chip8.release_key(chip8_key_idx);
+                    }
                 }
             }
 
@@ -190,7 +194,7 @@ impl ApplicationHandler for App {
     // Function that is called when the event loop is about to wait for new events.
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         // Unwrap components, returning if they are not initialized.
-        let chip8 = match self.chip8.as_mut() {
+        let chip8 = match self.emu.as_mut() {
             Some(chip8) => chip8,
             None => return, // If chip8 is None, return early
         };
@@ -202,7 +206,7 @@ impl ApplicationHandler for App {
         // Loop to execute CPU ticks until we've caught up with real time.
         while now.duration_since(self.last_cpu_tick_time) >= cpu_tick_duration {
             // Tick the Chip-8 CPU once.
-            chip8.tick();
+            chip8.cycle();
 
             // Advance the last tick time by the speed of a single CPU instruction.
             self.last_cpu_tick_time += cpu_tick_duration;
@@ -216,7 +220,7 @@ impl ApplicationHandler for App {
             chip8.tick_timers();
 
             // Get the sound timer.
-            let st = chip8.get_sound_timer();
+            let st = chip8.get_st();
 
             if st > 0 {
                 if self.beep_sink.is_none() || self.beep_sink.as_ref().unwrap().empty() {
