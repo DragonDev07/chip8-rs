@@ -1,13 +1,18 @@
-use crate::constants::{FONTSET, FONTSET_SIZE, MEMORY_SIZE, STACK_SIZE};
+use log::{debug, info};
 
-// TODO: Doc Comment
+use crate::{
+    constants::{FONTSET, FONTSET_SIZE, MEMORY_SIZE, STACK_SIZE},
+    error::MemoryError,
+};
+
+// Holds RAM and stack for the CHIP-8 emulator.
 pub struct Memory {
     ram: [u8; MEMORY_SIZE],
     stack: [u16; STACK_SIZE],
 }
 
 impl Memory {
-    // TODO: Doc Comment
+    // Initialize memory and stack, and load the fontset.
     pub fn new() -> Self {
         let mut mem = Self {
             ram: [0; MEMORY_SIZE],
@@ -17,57 +22,84 @@ impl Memory {
         mem
     }
 
-    // TODO: Doc Comment
+    // Reset memory and stack to initial state, reload fontset.
     pub fn reset(&mut self) {
-        let mut mem = Self {
-            ram: [0; MEMORY_SIZE],
-            stack: [0; STACK_SIZE],
-        };
-        mem.load_fontset();
+        self.ram = [0; MEMORY_SIZE];
+        self.stack = [0; STACK_SIZE];
+        self.load_fontset();
+        info!("Memory reset and fontset reloaded.")
     }
 
-    // TODO: Doc Comment
-    pub fn write_byte(&mut self, addr: u16, value: u8) {
-        self.ram[addr as usize] = value;
+    // Write a single byte to RAM at the given address.
+    pub fn write_byte(&mut self, addr: u16, value: u8) -> Result<(), MemoryError> {
+        if (addr as usize) < MEMORY_SIZE {
+            self.ram[addr as usize] = value;
+            Ok(())
+        } else {
+            Err(MemoryError::OutOfBoundsWrite { addr })
+        }
     }
 
-    // TODO: Doc Comment
-    pub fn write_bytes(&mut self, start: u16, data: &[u8]) {
-        self.ram[start as usize..start as usize + data.len()].copy_from_slice(data);
+    // Write a slice of bytes to RAM starting at the given address.
+    pub fn write_bytes(&mut self, start: u16, data: &[u8]) -> Result<(), MemoryError> {
+        if start as usize + data.len() <= MEMORY_SIZE {
+            self.ram[start as usize..start as usize + data.len()].copy_from_slice(data);
+            Ok(())
+        } else {
+            Err(MemoryError::OutOfBoundsWriteRange {
+                start: start,
+                len: data.len(),
+            })
+        }
     }
 
-    // TODO: Doc Comment
-    pub fn read_byte(&mut self, addr: u16) -> u8 {
-        self.ram[addr as usize]
+    // Read a single byte from RAM at the given address.
+    pub fn read_byte(&mut self, addr: u16) -> Result<u8, MemoryError> {
+        if (addr as usize) < MEMORY_SIZE {
+            Ok(self.ram[addr as usize])
+        } else {
+            Err(MemoryError::OutOfBoundsRead { addr })
+        }
     }
 
-    // TODO: Doc Comment
-    pub fn read_bytes(&self, start: u16, end: u16) -> Vec<u8> {
-        self.ram[start as usize..end as usize].to_vec()
+    // Read a range of bytes from RAM (start inclusive, end exclusive).
+    pub fn read_bytes(&self, start: u16, end: u16) -> Result<Vec<u8>, MemoryError> {
+        let start = start as usize;
+        let end = end as usize;
+        if start <= end && end <= MEMORY_SIZE {
+            Ok(self.ram[start..end].to_vec())
+        } else {
+            Err(MemoryError::OutOfBoundsReadRange {
+                start: start as u16,
+                end: end as u16,
+            })
+        }
     }
 
-    // TODO: Doc Comment
-    // Make sure to increment sp after calling!
-    pub fn push_stack(&mut self, sp: usize, value: u16) {
+    // Push a value onto the stack at the given stack pointer index.
+    // Caller should increment sp **after** calling.
+    pub fn push_stack(&mut self, sp: usize, value: u16) -> Result<(), MemoryError> {
         if sp < self.stack.len() {
             self.stack[sp] = value;
+            Ok(())
         } else {
-            panic!("Stack overflow!");
+            Err(MemoryError::StackOverflow { sp })
         }
     }
 
-    // TODO: Doc Comment
-    // Make sure to decrement sp before calling!
-    pub fn pop_stack(&self, sp: usize) -> u16 {
-        if sp > 0 && sp <= self.stack.len() {
-            self.stack[sp]
+    // Pop a value from the stack at the given stack pointer index.
+    // Caller should decrement sp before calling.
+    pub fn pop_stack(&mut self, sp: usize) -> Result<u16, MemoryError> {
+        if sp < self.stack.len() {
+            Ok(self.stack[sp])
         } else {
-            panic!("Stack underflow"); // TODO: Actual error handling.
+            Err(MemoryError::StackUnderflow { sp })
         }
     }
 
-    // Helper function to load fontset into ram.
+    // Helper function to load the CHIP-8 fontset into the beginning of RAM.
     fn load_fontset(&mut self) {
         self.ram[..FONTSET_SIZE].copy_from_slice(&FONTSET);
+        debug!("Fontset loaded into memory.");
     }
 }

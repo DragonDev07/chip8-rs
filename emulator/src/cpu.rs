@@ -1,11 +1,14 @@
+use log::info;
+
 use crate::{
     constants::{NUM_KEYS, NUM_REGS, PROGRAM_START},
     display::Display,
+    error::CpuError,
     input::Keypad,
     memory::Memory,
 };
 
-// TODO: Doc Comment
+// Holds the state of the CHIP-8 CPU, including registers, timers, and pointers.
 pub struct Cpu {
     pc: u16,               // Program Counter
     sp: u16,               // Stack Pointer
@@ -16,7 +19,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    // TODO: Doc Comment
+    // Create a new CPU with registers and pointers initialized.
     pub fn new() -> Self {
         Self {
             pc: PROGRAM_START,
@@ -28,7 +31,7 @@ impl Cpu {
         }
     }
 
-    // TODO: Doc Comment
+    // Reset CPU state to initial values.
     pub fn reset(&mut self) {
         self.pc = PROGRAM_START;
         self.sp = 0;
@@ -36,18 +39,27 @@ impl Cpu {
         self.i_reg = 0;
         self.dt = 0;
         self.st = 0;
+        info!(
+            "CPU reset (PC set to {:#05X}, registers cleared).",
+            PROGRAM_START
+        );
     }
 
-    // TODO: Doc Comment
-    pub fn cycle(&mut self, memory: &mut Memory, display: &mut Display, keypad: &mut Keypad) {
-        let op = (memory.read_byte(self.pc) as u16) << 8 | memory.read_byte(self.pc + 1) as u16;
+    // Perform a single CPU cycle: fetch, decode, and execute one opcode.
+    pub fn cycle(
+        &mut self,
+        memory: &mut Memory,
+        display: &mut Display,
+        keypad: &mut Keypad,
+    ) -> Result<(), CpuError> {
+        let op = (memory.read_byte(self.pc)? as u16) << 8 | memory.read_byte(self.pc + 1)? as u16;
         self.pc += 2;
 
         // Execute opcode
-        self.execute(op, memory, display, keypad);
+        self.execute(op, memory, display, keypad)
     }
 
-    // TODO: Doc Comment
+    // Decrement the delay and sound timers if they are not zero.
     pub fn tick_timers(&mut self) {
         if self.dt > 0 {
             self.dt -= 1
@@ -57,19 +69,19 @@ impl Cpu {
         }
     }
 
-    // TODO: Doc Comment
+    // Get the current value of the sound timer.
     pub fn get_st(&self) -> u8 {
         self.st
     }
 
-    // TODO: Doc Comment
+    // Decode and execute a single opcode.
     fn execute(
         &mut self,
         op: u16,
         memory: &mut Memory,
         display: &mut Display,
         keypad: &mut Keypad,
-    ) {
+    ) -> Result<(), CpuError> {
         let n1 = (op & 0xF000) >> 12;
         let n2 = (op & 0x0F00) >> 8;
         let n3 = (op & 0x00F0) >> 4;
@@ -79,7 +91,7 @@ impl Cpu {
 
         match (n1, n2, n3, n4) {
             // NOP
-            (0, 0, 0, 0) => return,
+            (0, 0, 0, 0) => {}
 
             // 00E0 -> Clear screen.
             (0, 0, 0xE, 0) => display.clear(),
@@ -87,7 +99,7 @@ impl Cpu {
             // 00EE -> Return from a subroutine (returns to PC on stack).
             (0, 0, 0xE, 0xE) => {
                 self.sp -= 1;
-                self.pc = memory.pop_stack(self.sp as usize);
+                self.pc = memory.pop_stack(self.sp as usize)?;
             }
 
             // 1NNN -> Jump to address NNN.
@@ -95,7 +107,7 @@ impl Cpu {
 
             // 2NNN -> Execute subroutine starting at address NNN.
             (2, _, _, _) => {
-                memory.push_stack(self.sp as usize, self.pc);
+                memory.push_stack(self.sp as usize, self.pc)?;
                 self.sp += 1;
                 self.pc = nnn;
             }
@@ -204,7 +216,7 @@ impl Cpu {
                 let x = self.v_reg[n2 as usize] as usize;
                 let y = self.v_reg[n3 as usize] as usize;
                 let sprite = memory.read_bytes(self.i_reg, self.i_reg + n4);
-                let flipped = display.draw_sprite(x, y, &sprite);
+                let flipped = display.draw_sprite(x, y, &sprite?);
 
                 // Populate VF register based on whether any pixels were flipped from "on" to "off".
                 self.v_reg[0xF] = flipped as u8;
@@ -212,14 +224,14 @@ impl Cpu {
 
             // EX9E -> Skip next instruction if key specified in VX is pressed.
             (0xE, _, 9, 0xE) => {
-                if keypad.is_pressed(self.v_reg[n2 as usize] as usize) {
+                if keypad.is_pressed(self.v_reg[n2 as usize] as usize)? {
                     self.pc += 2;
                 }
             }
 
             // EXA1 -> Skip next instruction if key specified in VX is NOT pressed.
             (0xE, _, 0xA, 1) => {
-                if !keypad.is_pressed(self.v_reg[n2 as usize] as usize) {
+                if !keypad.is_pressed(self.v_reg[n2 as usize] as usize)? {
                     self.pc += 2;
                 }
             }
@@ -232,7 +244,7 @@ impl Cpu {
                 let mut pressed = false;
 
                 for i in 0..NUM_KEYS {
-                    if keypad.is_pressed(i) {
+                    if keypad.is_pressed(i)? {
                         self.v_reg[n2 as usize] = i as u8;
                         pressed = true;
                         break;
@@ -254,7 +266,7 @@ impl Cpu {
 
             // FX29 -> Set I to the location of the sprite for the hexadecimal digit stored in VX.
             (0xF, _, 2, 9) => {
-                self.i_reg = self.i_reg.wrapping_add(self.v_reg[n2 as usize] as u16 * 5);
+                self.i_reg = self.v_reg[n2 as usize] as u16 * 5;
             }
 
             // FX33 -> Store the BCD (Binary Coded Decimal) equivalent of value in VX to
@@ -273,9 +285,9 @@ impl Cpu {
                 let ones = (vx % 10.0) as u8;
 
                 // Store the BCD digits in memory.
-                memory.write_byte(self.i_reg, hundreds);
-                memory.write_byte(self.i_reg + 1, tens);
-                memory.write_byte(self.i_reg + 2, ones);
+                memory.write_byte(self.i_reg, hundreds)?;
+                memory.write_byte(self.i_reg + 1, tens)?;
+                memory.write_byte(self.i_reg + 2, ones)?;
             }
 
             // FX55 -> Store values from V0 - VX in memory starting at address specified by I.
@@ -285,7 +297,7 @@ impl Cpu {
                 // Loop from V0 up to and including VX
                 for i in 0..=x {
                     // Store the value of Vi into RAM at address I
-                    memory.write_byte(self.i_reg + 1, self.v_reg[i]);
+                    memory.write_byte(self.i_reg, self.v_reg[i])?;
 
                     // Increment I register for the next memory address.
                     self.i_reg += 1;
@@ -299,14 +311,15 @@ impl Cpu {
                 // Loop from V0 up to and including VX
                 for i in 0..=x {
                     // Load the value from RAM at address I into register Vi
-                    self.v_reg[i] = memory.read_byte(self.i_reg);
+                    self.v_reg[i] = memory.read_byte(self.i_reg)?;
 
                     // Increment I register for the next memory address.
                     self.i_reg += 1;
                 }
             }
 
-            _ => unimplemented!("Unimplemented opcode: {:#X}", op),
+            _ => return Err(CpuError::UnimplementedOpcode { opcode: op }),
         }
+        Ok(())
     }
 }

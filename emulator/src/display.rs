@@ -1,36 +1,50 @@
+use log::{debug, warn};
+
 use crate::constants::{DISPLAY_HEIGHT, DISPLAY_WIDTH};
 
-// TODO: Doc Comment
+// Holds the display buffer for the CHIP-8 emulator as a 2D array.
 pub struct Display {
-    display_buffer: [[bool; DISPLAY_WIDTH]; DISPLAY_HEIGHT], // Screen as 2D array
+    display_buffer: [[bool; DISPLAY_WIDTH]; DISPLAY_HEIGHT], // Screen as 2D array.
 }
 
 impl Display {
-    // TODO: Doc Comment
+    // Create a new display with all pixels turned off.
     pub fn new() -> Self {
         Self {
             display_buffer: [[false; DISPLAY_WIDTH]; DISPLAY_HEIGHT],
         }
     }
 
-    // TODO: Doc Comment
-    pub fn reset(&mut self) {
+    // Clear the display (set all pixels to off).
+    pub fn clear(&mut self) {
         self.display_buffer = [[false; DISPLAY_WIDTH]; DISPLAY_HEIGHT];
+        debug!("Display reset / cleared.")
     }
 
-    // TODO: Doc Comment
+    // Get a reference to the display buffer.
     pub fn get_buffer(&self) -> &[[bool; DISPLAY_WIDTH]; DISPLAY_HEIGHT] {
         &self.display_buffer
     }
 
-    // TODO: Doc Comment
-    pub fn clear(&mut self) {
-        self.display_buffer = [[false; DISPLAY_WIDTH]; DISPLAY_HEIGHT];
-    }
-
-    // TODO: Doc Comment
-    // If theres an issue with this, check height or 1D array logic.
+    // Draw a sprite at (x, y) onto the display buffer.
+    // Returns true if any pixels were flipped from set to unset (collision).
     pub fn draw_sprite(&mut self, x: usize, y: usize, sprite: &[u8]) -> bool {
+        // Handle sprite possibly being empty.
+        if sprite.is_empty() {
+            warn!("Attempted to draw empty sprite at ({}, {})", x, y);
+            return false;
+        }
+
+        // Handle sprite possibly being too large for CHIP-8.
+        if sprite.len() > 15 {
+            warn!(
+                "Sprite length {} exceeds CHIP-8 max at ({}, {})",
+                sprite.len(),
+                x,
+                y
+            );
+        }
+
         let mut flipped = false;
         let height = sprite.len();
 
