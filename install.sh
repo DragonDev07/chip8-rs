@@ -3,7 +3,7 @@
 set -e
 
 BINARY_NAME="chip8-emu"
-ROM_PATH="test_roms/Chip8 Emulator Logo"
+ROM_PATH="test_roms/Chip8 Emulator Logo.ch8"
 INSTALL_PATH="/usr/local/bin"
 
 # Detect OS
