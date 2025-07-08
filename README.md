@@ -9,6 +9,7 @@ A simple chip8 emulator written in Rust.
 
 ## Keyboard Layout
 ### CHIP-8 Layout
+|     |     |     |     |
 | --- | --- | --- | --- |
 | `1` | `2` | `3` | `C` |
 | `4` | `5` | `6` | `D` |
@@ -16,6 +17,7 @@ A simple chip8 emulator written in Rust.
 | `A` | `0` | `B` | `F` |
 
 ### Qwerty Layout
+|     |     |     |     |
 | --- | --- | --- | --- |
 | `1` | `2` | `3` | `4` |
 | `Q` | `W` | `E` | `R` |
