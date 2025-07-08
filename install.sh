@@ -3,7 +3,7 @@
 set -e
 
 BINARY_NAME="chip8-emu"
-ROM_PATH="test_roms/Chip8 emulator Logo.ch8"
+ROM_PATH="test_roms/Chip8 Emulator Logo"
 INSTALL_PATH="/usr/local/bin"
 
 # Detect OS
@@ -13,7 +13,12 @@ echo "Detected OS: $OS"
 if [ "$OS" = "Darwin" ] || [ "$OS" = "Linux" ]; then
     # Ask user about installing to /usr/local/bin
     echo "Would you like to install the emulator binary to $INSTALL_PATH? (y/n)"
-    read -r INSTALL_CHOICE
+    if [ -t 0 ]; then
+        read -r INSTALL_CHOICE
+    else
+        # If not running in a terminal, read from /dev/tty
+        read -r INSTALL_CHOICE < /dev/tty
+    fi
 
     # Build the project in release mode
     echo "Building the project in release mode..."
