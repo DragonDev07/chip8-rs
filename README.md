@@ -39,6 +39,20 @@ These ROMs can be run directly with the emulator to test functionality or just t
 Note: I have not documented the controls for each game, as they heavily vary, you'll just have to try them out.
 
 ## Usage / Demo
+```bash
+> chip8-rs --help
+
+Usage: chip8-emu [OPTIONS] <ROM_PATH>
+
+Arguments:
+  <ROM_PATH>  Path to the ROM file to be loaded
+
+Options:
+  -s, --steps-per-frame <STEPS>  Number of CPU steps per frame (overrides CPU frequency if set)
+  -f, --cpu-frequency <HZ>       CPU frequency in Hz [default: 600]
+  -h, --help                     Print help
+  -V, --version                  Print version
+```
 
 ## Handsfree Installation (Recommended)
 
