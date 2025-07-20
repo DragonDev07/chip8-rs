@@ -39,8 +39,10 @@ These ROMs can be run directly with the emulator to test functionality or just t
 Note: I have not documented the controls for each game, as they heavily vary, you'll just have to try them out.
 
 ## Usage / Demo
-```bash
+```
 > chip8-rs --help
+
+A simple CHIP-8 emulator written in Rust.
 
 Usage: chip8-emu [OPTIONS] <ROM_PATH>
 
@@ -48,8 +50,10 @@ Arguments:
   <ROM_PATH>  Path to the ROM file to be loaded
 
 Options:
-  -s, --steps-per-frame <STEPS>  Number of CPU steps per frame (overrides CPU frequency if set)
-  -f, --cpu-frequency <HZ>       CPU frequency in Hz [default: 600]
+  -f, --cpu-frequency <HZ>       CPU frequency in Hz (default: 500) [default: 500]
+  -d, --display-frequency <HZ>   Display refresh frequency in Hz (default: 60) [default: 60]
+  -t, --timer-frequency <HZ>     Timer frequency in Hz (default: 60) [default: 60]
+  -s, --steps-per-frame <STEPS>  Number of CPU steps per frame (overrides calculated value using CPU and display frequency)
   -h, --help                     Print help
   -V, --version                  Print version
 ```

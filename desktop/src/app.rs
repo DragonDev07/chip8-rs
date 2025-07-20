@@ -22,7 +22,6 @@ use crate::sound::Sound;
 const WINDOW_WIDTH: u32 = emulator::constants::DISPLAY_WIDTH as u32;
 const WINDOW_HEIGHT: u32 = emulator::constants::DISPLAY_HEIGHT as u32;
 const WINDOW_SCALE: u32 = 20;
-const TIMER_FREQUENCY: u32 = 60;
 
 pub struct App {
     pub args: Args,
@@ -81,26 +80,23 @@ impl App {
         Ok(())
     }
 
-    fn step_cpu(&mut self, now: Instant) {
+    fn step_cpu(&mut self) {
         let emu = match self.emu.as_mut() {
             Some(emu) => emu,
             None => return,
         };
 
-        if let Some(steps) = self.args.steps_per_frame {
-            for _ in 0..steps {
-                if let Err(e) = emu.cycle() {
-                    eprintln!("{:?}", Report::new(e));
-                }
-            }
+        // Determine steps per frame: use argument if present, otherwise calculate.
+        let steps_per_frame = if let Some(steps) = self.args.steps_per_frame {
+            steps
         } else {
-            let cpu_tick_duration =
-                Duration::from_micros(1_000_000 / self.args.cpu_frequency as u64);
-            while now.duration_since(self.last_cpu_tick_time) >= cpu_tick_duration {
-                if let Err(e) = emu.cycle() {
-                    eprintln!("{:?}", Report::new(e));
-                }
-                self.last_cpu_tick_time += cpu_tick_duration;
+            // Calculate steps per frame as cpu_frequency / display_frequency.
+            (self.args.cpu_frequency / self.args.display_frequency) as usize
+        };
+
+        for _ in 0..steps_per_frame {
+            if let Err(e) = emu.cycle() {
+                eprintln!("{:?}", Report::new(e));
             }
         }
     }
@@ -111,7 +107,8 @@ impl App {
             None => return,
         };
 
-        let timer_tick_duration = Duration::from_micros(1_000_000 / TIMER_FREQUENCY as u64);
+        let timer_tick_duration =
+            Duration::from_micros(1_000_000 / self.args.timer_frequency as u64);
         while now.duration_since(self.last_timer_tick_time) >= timer_tick_duration {
             emu.tick_timers();
             let st = emu.get_st();
@@ -265,7 +262,7 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
-        self.step_cpu(now);
+        self.step_cpu();
         self.tick_timers(now);
         self.draw_and_render(event_loop);
     }
